@@ -3,3 +3,13 @@ html, body, #app {
   margin: 0;
   box-sizing: border-box;
 }
+
+body {
+  max-width: 100%;
+}
+
+#app {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
