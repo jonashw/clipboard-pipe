@@ -167,9 +167,11 @@ function toMarkdown({ headers, rows }: TableData): string {
 function CopyButton({
   label,
   onCopy,
+  disabled,
 }: {
   label: string;
   onCopy: () => Promise<void>;
+  disabled?: boolean;
 }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
 
@@ -185,7 +187,7 @@ function CopyButton({
   };
 
   return (
-    <button onClick={handleClick}>
+    <button onClick={handleClick} disabled={disabled}>
       {status === "copied"
         ? "✓ Copied"
         : status === "error"
@@ -209,9 +211,10 @@ const copyRich = (html: string) => () => {
   return navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]);
 };
 
-function TableCard({ table, index }: { table: TableData; index: number }) {
+function TableCard({ table, index, detectedFormat }: { table: TableData; index: number; detectedFormat: Format | null }) {
   const [preview, setPreview] = useState(false);
   const html = toHtmlTable(table);
+  const is = (f: Format) => detectedFormat === f;
 
   return (
     <div>
@@ -237,12 +240,12 @@ function TableCard({ table, index }: { table: TableData; index: number }) {
       </p>
       <p style={{ marginBottom: "0.25rem" }}>Copy as:</p>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <CopyButton label="CSV" onCopy={copyText(toCsv(table))} />
-        <CopyButton label="TSV" onCopy={copyText(toTsv(table))} />
-        <CopyButton label="JSON" onCopy={copyText(toJson(table))} />
-        <CopyButton label="Markdown" onCopy={copyText(toMarkdown(table))} />
-        <CopyButton label="HTML" onCopy={copyText(html)} />
-        <CopyButton label="Table" onCopy={copyRich(html)} />
+        <CopyButton label="CSV"      disabled={is("csv")}      onCopy={copyText(toCsv(table))} />
+        <CopyButton label="TSV"      disabled={is("tsv")}      onCopy={copyText(toTsv(table))} />
+        <CopyButton label="JSON"     disabled={is("json")}     onCopy={copyText(toJson(table))} />
+        <CopyButton label="Markdown" disabled={is("markdown")} onCopy={copyText(toMarkdown(table))} />
+        <CopyButton label="HTML"     disabled={is("html")}     onCopy={copyText(html)} />
+        <CopyButton label="Table"    disabled={is("html")}     onCopy={copyRich(html)} />
       </div>
       {preview && <div dangerouslySetInnerHTML={{ __html: html }} />}
     </div>
@@ -349,7 +352,7 @@ export default function App() {
           </p>
         )}
         {tables.map((table, i) => (
-          <TableCard key={i} table={table} index={i} />
+          <TableCard key={i} table={table} index={i} detectedFormat={detectedFormat} />
         ))}
       </div>
     </div>
