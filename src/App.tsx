@@ -168,31 +168,18 @@ function CopyButton({
   label,
   onCopy,
   disabled,
+  isCopied,
+  isError,
 }: {
   label: string;
-  onCopy: () => Promise<void>;
+  onCopy: () => void;
   disabled?: boolean;
+  isCopied?: boolean;
+  isError?: boolean;
 }) {
-  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
-
-  const handleClick = async () => {
-    try {
-      await onCopy();
-      setStatus("copied");
-      setTimeout(() => setStatus("idle"), 2000);
-    } catch {
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 2000);
-    }
-  };
-
   return (
-    <button onClick={handleClick} disabled={disabled}>
-      {status === "copied"
-        ? "✓ Copied"
-        : status === "error"
-          ? "✗ Failed"
-          : label}
+    <button onClick={onCopy} disabled={disabled}>
+      {isCopied ? "✓ Copied" : isError ? "✗ Failed" : label}
     </button>
   );
 }
@@ -213,8 +200,23 @@ const copyRich = (html: string) => () => {
 
 function TableCard({ table, index, detectedFormat }: { table: TableData; index: number; detectedFormat: Format | null }) {
   const [preview, setPreview] = useState(false);
+  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+  const [errorLabel, setErrorLabel] = useState<string | null>(null);
   const html = toHtmlTable(table);
   const is = (f: Format) => detectedFormat === f;
+
+  const handleCopy = (label: string, fn: () => Promise<void>) => async () => {
+    setCopiedLabel(null);
+    setErrorLabel(null);
+    try {
+      await fn();
+      setCopiedLabel(label);
+      setTimeout(() => setCopiedLabel(null), 2000);
+    } catch {
+      setErrorLabel(label);
+      setTimeout(() => setErrorLabel(null), 2000);
+    }
+  };
 
   return (
     <div>
@@ -240,12 +242,12 @@ function TableCard({ table, index, detectedFormat }: { table: TableData; index: 
       </p>
       <p style={{ marginBottom: "0.25rem" }}>Copy as:</p>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <CopyButton label="CSV"      disabled={is("csv")}      onCopy={copyText(toCsv(table))} />
-        <CopyButton label="TSV"      disabled={is("tsv")}      onCopy={copyText(toTsv(table))} />
-        <CopyButton label="JSON"     disabled={is("json")}     onCopy={copyText(toJson(table))} />
-        <CopyButton label="Markdown" disabled={is("markdown")} onCopy={copyText(toMarkdown(table))} />
-        <CopyButton label="HTML"     disabled={is("html")}     onCopy={copyText(html)} />
-        <CopyButton label="Table"    disabled={is("html")}     onCopy={copyRich(html)} />
+        <CopyButton label="CSV"      disabled={is("csv")}      isCopied={copiedLabel === "CSV"}      isError={errorLabel === "CSV"}      onCopy={handleCopy("CSV",      copyText(toCsv(table)))} />
+        <CopyButton label="TSV"      disabled={is("tsv")}      isCopied={copiedLabel === "TSV"}      isError={errorLabel === "TSV"}      onCopy={handleCopy("TSV",      copyText(toTsv(table)))} />
+        <CopyButton label="JSON"     disabled={is("json")}     isCopied={copiedLabel === "JSON"}     isError={errorLabel === "JSON"}     onCopy={handleCopy("JSON",     copyText(toJson(table)))} />
+        <CopyButton label="Markdown" disabled={is("markdown")} isCopied={copiedLabel === "Markdown"} isError={errorLabel === "Markdown"} onCopy={handleCopy("Markdown", copyText(toMarkdown(table)))} />
+        <CopyButton label="HTML"     disabled={is("html")}     isCopied={copiedLabel === "HTML"}     isError={errorLabel === "HTML"}     onCopy={handleCopy("HTML",     copyText(html))} />
+        <CopyButton label="Table"    disabled={is("html")}     isCopied={copiedLabel === "Table"}    isError={errorLabel === "Table"}    onCopy={handleCopy("Table",    copyRich(html))} />
       </div>
       {preview && <div dangerouslySetInnerHTML={{ __html: html }} />}
     </div>
