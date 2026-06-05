@@ -12,20 +12,23 @@ type Format = "markdown" | "csv" | "tsv" | "html" | "json";
 
 // ── Detection ────────────────────────────────────────────────────────────────
 
-function detectFormat(input: string): Format {
+function detectFormat(input: string): Format | null {
   const t = input.trim();
   if (t.startsWith("[") || t.startsWith("{")) {
-    try {
-      JSON.parse(t);
-      return "json";
-    } catch {
-      /* not JSON */
-    }
+    try { JSON.parse(t); return "json"; } catch { /* not JSON */ }
   }
   if (/<table[\s>]/i.test(t)) return "html";
   if (/^\|.+\|/m.test(t)) return "markdown";
   if (/\t/.test(t)) return "tsv";
-  return "csv";
+
+  // CSV: require consistent comma count across all non-empty lines (min 1 comma)
+  const lines = t.split("\n").filter((l) => l.trim());
+  if (lines.length >= 2) {
+    const counts = lines.map((l) => (l.match(/,/g) ?? []).length);
+    if (counts[0] > 0 && counts.every((c) => c === counts[0])) return "csv";
+  }
+
+  return null;
 }
 
 // ── Parsers ──────────────────────────────────────────────────────────────────
@@ -275,7 +278,9 @@ export default function App() {
     const format = detectFormat(trimmed);
     setDetectedFormat(format);
 
-    if (format === "markdown") {
+    if (format === null) {
+      setTables([]);
+    } else if (format === "markdown") {
       parseMarkdown(trimmed)
         .then(setTables)
         .catch((err) => console.error("Markdown parse error:", err));
@@ -348,11 +353,10 @@ export default function App() {
         />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        {detectedFormat && (
-          <p>
-            Detected: <strong>{FORMAT_LABELS[detectedFormat]}</strong>
-          </p>
-        )}
+        {detectedFormat
+          ? <p>Detected: <strong>{FORMAT_LABELS[detectedFormat]}</strong></p>
+          : input.trim() && <p>⚠ Format not recognized — paste Markdown, CSV, TSV, HTML, or JSON.</p>
+        }
         {tables.map((table, i) => (
           <TableCard key={i} table={table} index={i} detectedFormat={detectedFormat} />
         ))}
