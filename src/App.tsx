@@ -15,7 +15,12 @@ type Format = "markdown" | "csv" | "tsv" | "html" | "json";
 function detectFormat(input: string): Format | null {
   const t = input.trim();
   if (t.startsWith("[") || t.startsWith("{")) {
-    try { JSON.parse(t); return "json"; } catch { /* not JSON */ }
+    try {
+      JSON.parse(t);
+      return "json";
+    } catch {
+      /* not JSON */
+    }
   }
   if (/<table[\s>]/i.test(t)) return "html";
   if (/^\|.+\|/m.test(t)) return "markdown";
@@ -201,7 +206,15 @@ const copyRich = (html: string) => () => {
   return navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]);
 };
 
-function TableCard({ table, index, detectedFormat }: { table: TableData; index: number; detectedFormat: Format | null }) {
+function TableCard({
+  table,
+  index,
+  detectedFormat,
+}: {
+  table: TableData;
+  index: number;
+  detectedFormat: Format | null;
+}) {
   const [preview, setPreview] = useState(false);
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
   const [errorLabel, setErrorLabel] = useState<string | null>(null);
@@ -245,12 +258,48 @@ function TableCard({ table, index, detectedFormat }: { table: TableData; index: 
       </p>
       <p style={{ marginBottom: "0.25rem" }}>Copy as:</p>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <CopyButton label="CSV"      disabled={is("csv")}      isCopied={copiedLabel === "CSV"}      isError={errorLabel === "CSV"}      onCopy={handleCopy("CSV",      copyText(toCsv(table)))} />
-        <CopyButton label="TSV"      disabled={is("tsv")}      isCopied={copiedLabel === "TSV"}      isError={errorLabel === "TSV"}      onCopy={handleCopy("TSV",      copyText(toTsv(table)))} />
-        <CopyButton label="JSON"     disabled={is("json")}     isCopied={copiedLabel === "JSON"}     isError={errorLabel === "JSON"}     onCopy={handleCopy("JSON",     copyText(toJson(table)))} />
-        <CopyButton label="Markdown" disabled={is("markdown")} isCopied={copiedLabel === "Markdown"} isError={errorLabel === "Markdown"} onCopy={handleCopy("Markdown", copyText(toMarkdown(table)))} />
-        <CopyButton label="HTML"     disabled={is("html")}     isCopied={copiedLabel === "HTML"}     isError={errorLabel === "HTML"}     onCopy={handleCopy("HTML",     copyText(html))} />
-        <CopyButton label="Table"    disabled={is("html")}     isCopied={copiedLabel === "Table"}    isError={errorLabel === "Table"}    onCopy={handleCopy("Table",    copyRich(html))} />
+        <CopyButton
+          label="CSV"
+          disabled={is("csv")}
+          isCopied={copiedLabel === "CSV"}
+          isError={errorLabel === "CSV"}
+          onCopy={handleCopy("CSV", copyText(toCsv(table)))}
+        />
+        <CopyButton
+          label="TSV"
+          disabled={is("tsv")}
+          isCopied={copiedLabel === "TSV"}
+          isError={errorLabel === "TSV"}
+          onCopy={handleCopy("TSV", copyText(toTsv(table)))}
+        />
+        <CopyButton
+          label="JSON"
+          disabled={is("json")}
+          isCopied={copiedLabel === "JSON"}
+          isError={errorLabel === "JSON"}
+          onCopy={handleCopy("JSON", copyText(toJson(table)))}
+        />
+        <CopyButton
+          label="Markdown"
+          disabled={is("markdown")}
+          isCopied={copiedLabel === "Markdown"}
+          isError={errorLabel === "Markdown"}
+          onCopy={handleCopy("Markdown", copyText(toMarkdown(table)))}
+        />
+        <CopyButton
+          label="HTML"
+          disabled={is("html")}
+          isCopied={copiedLabel === "HTML"}
+          isError={errorLabel === "HTML"}
+          onCopy={handleCopy("HTML", copyText(html))}
+        />
+        <CopyButton
+          label="Table"
+          disabled={is("html")}
+          isCopied={copiedLabel === "Table"}
+          isError={errorLabel === "Table"}
+          onCopy={handleCopy("Table", copyRich(html))}
+        />
       </div>
       {preview && <div dangerouslySetInnerHTML={{ __html: html }} />}
     </div>
@@ -346,6 +395,7 @@ export default function App() {
           rows={24}
           style={{
             width: "100%",
+            height: "95vh",
             resize: "vertical",
             fontFamily: "monospace",
             fontSize: "14px",
@@ -353,12 +403,24 @@ export default function App() {
         />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        {detectedFormat
-          ? <p>Detected: <strong>{FORMAT_LABELS[detectedFormat]}</strong></p>
-          : input.trim() && <p>⚠ Format not recognized — paste Markdown, CSV, TSV, HTML, or JSON.</p>
-        }
+        {detectedFormat ? (
+          <p>
+            Detected: <strong>{FORMAT_LABELS[detectedFormat]}</strong>
+          </p>
+        ) : (
+          input.trim() && (
+            <p>
+              ⚠ Format not recognized — paste Markdown, CSV, TSV, HTML, or JSON.
+            </p>
+          )
+        )}
         {tables.map((table, i) => (
-          <TableCard key={i} table={table} index={i} detectedFormat={detectedFormat} />
+          <TableCard
+            key={i}
+            table={table}
+            index={i}
+            detectedFormat={detectedFormat}
+          />
         ))}
       </div>
     </div>
