@@ -1,0 +1,48 @@
+<table>
+    <thead>
+        <tr>
+            <th>Problem</th>
+            <th>Config</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Single process wastes available CPU cores</td>
+            <td><code>workers=2</code> (start conservative)</td>
+            <td>2x throughput if memory allows</td>
+        </tr>
+        <tr>
+            <td>Write mode acquires locks even for read-only queries</td>
+            <td><code>read_only=True</code> on DuckDB</td>
+            <td>Eliminates lock contention</td>
+        </tr>
+        <tr>
+            <td>
+                DuckDB may not parallelize internally with single-threaded
+                request loop
+            </td>
+            <td>
+                Set <code>config={"threads": "4"}</code> on DuckDB connections
+            </td>
+            <td>Better intra-query parallelism</td>
+        </tr>
+        <tr>
+            <td>
+                Enables file-watching overhead and forces single-worker mode
+            </td>
+            <td>Remove <code>reload=True</code></td>
+            <td>Prerequisite for multi-worker</td>
+        </tr>
+        <tr>
+            <td>
+                Heavy alloc/dealloc of Pandas DataFrames causes memory
+                fragmentation
+            </td>
+            <td>
+                <code>LD_PRELOAD</code> jemalloc / set <code>MALLOC_CONF</code>
+            </td>
+            <td>Steadier performance under sustained load</td>
+        </tr>
+    </tbody>
+</table>
