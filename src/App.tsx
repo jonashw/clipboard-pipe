@@ -15,7 +15,12 @@ type Format = "markdown" | "csv" | "tsv" | "html" | "json";
 function detectFormat(input: string): Format {
   const t = input.trim();
   if (t.startsWith("[") || t.startsWith("{")) {
-    try { JSON.parse(t); return "json"; } catch { /* not JSON */ }
+    try {
+      JSON.parse(t);
+      return "json";
+    } catch {
+      /* not JSON */
+    }
   }
   if (/<table[\s>]/i.test(t)) return "html";
   if (/^\|.+\|/m.test(t)) return "markdown";
@@ -28,7 +33,11 @@ function detectFormat(input: string): Format {
 function extractText(nodes: PhrasingContent[]): string {
   return nodes
     .map((n) =>
-      "value" in n ? n.value : "children" in n ? extractText(n.children as PhrasingContent[]) : "",
+      "value" in n
+        ? n.value
+        : "children" in n
+          ? extractText(n.children as PhrasingContent[])
+          : "",
     )
     .join("");
 }
@@ -38,8 +47,14 @@ function extractMarkdownTables(ast: Root): TableData[] {
   visit(ast, "table", (node: Table) => {
     const [headerRow, ...dataRows] = node.children as TableRow[];
     tables.push({
-      headers: headerRow.children.map((cell) => extractText(cell.children as PhrasingContent[])),
-      rows: dataRows.map((row) => row.children.map((cell) => extractText(cell.children as PhrasingContent[]))),
+      headers: headerRow.children.map((cell) =>
+        extractText(cell.children as PhrasingContent[]),
+      ),
+      rows: dataRows.map((row) =>
+        row.children.map((cell) =>
+          extractText(cell.children as PhrasingContent[]),
+        ),
+      ),
     });
   });
   return tables;
@@ -50,7 +65,9 @@ async function parseMarkdown(input: string): Promise<TableData[]> {
   await unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .use(() => (tree: Root) => { ast = tree; })
+    .use(() => (tree: Root) => {
+      ast = tree;
+    })
     .use(remarkHtml, { sanitize: false })
     .process(input);
   return ast ? extractMarkdownTables(ast) : [];
@@ -67,13 +84,18 @@ function parseCsv(input: string): TableData[] {
 }
 
 function parseTsv(input: string): TableData[] {
-  const allRows = input.trim().split("\n").map((line) => line.split("\t"));
+  const allRows = input
+    .trim()
+    .split("\n")
+    .map((line) => line.split("\t"));
   return allRows.length > 1 ? [fromRows(allRows)] : [];
 }
 
 function parseJson(input: string): TableData[] {
   const parsed = JSON.parse(input);
-  const arr: Record<string, unknown>[] = Array.isArray(parsed) ? parsed : [parsed];
+  const arr: Record<string, unknown>[] = Array.isArray(parsed)
+    ? parsed
+    : [parsed];
   if (!arr.length) return [];
   const headers = Object.keys(arr[0]);
   const rows = arr.map((obj) => headers.map((k) => String(obj[k] ?? "")));
@@ -84,7 +106,9 @@ function parseHtml(input: string): TableData[] {
   const doc = new DOMParser().parseFromString(input, "text/html");
   return Array.from(doc.querySelectorAll("table")).map((table) => {
     const allRows = Array.from(table.querySelectorAll("tr")).map((row) =>
-      Array.from(row.querySelectorAll("th, td")).map((cell) => cell.textContent ?? ""),
+      Array.from(row.querySelectorAll("th, td")).map(
+        (cell) => cell.textContent ?? "",
+      ),
     );
     return fromRows(allRows);
   });
@@ -103,7 +127,11 @@ function toCsv({ headers, rows }: TableData): string {
 
 function toTsv({ headers, rows }: TableData): string {
   return [headers, ...rows]
-    .map((row) => row.map((cell) => cell.replace(/\t/g, " ").replace(/\n/g, " ")).join("\t"))
+    .map((row) =>
+      row
+        .map((cell) => cell.replace(/\t/g, " ").replace(/\n/g, " "))
+        .join("\t"),
+    )
     .join("\n");
 }
 
@@ -115,15 +143,34 @@ function toHtmlTable({ headers, rows }: TableData): string {
 
 function toJson({ headers, rows }: TableData): string {
   return JSON.stringify(
-    rows.map((row) => Object.fromEntries(headers.map((key, i) => [key, row[i] ?? ""]))),
+    rows.map((row) =>
+      Object.fromEntries(headers.map((key, i) => [key, row[i] ?? ""])),
+    ),
     null,
     2,
   );
 }
 
-// ── Components ───────────────────────────────────────────────────────────────
+function toMarkdown({ headers, rows }: TableData): string {
+  const cols = headers.length;
+  const colWidths = Array.from({ length: cols }, (_, i) =>
+    Math.max(headers[i].length, ...rows.map((r) => (r[i] ?? "").length), 3),
+  );
+  const pad = (s: string, w: number) => s.padEnd(w);
+  const renderRow = (cells: string[]) =>
+    "| " + cells.map((c, i) => pad(c, colWidths[i])).join(" | ") + " |";
+  const separator =
+    "| " + colWidths.map((w) => "-".repeat(w)).join(" | ") + " |";
+  return [renderRow(headers), separator, ...rows.map(renderRow)].join("\n");
+}
 
-function CopyButton({ label, onCopy }: { label: string; onCopy: () => Promise<void> }) {
+function CopyButton({
+  label,
+  onCopy,
+}: {
+  label: string;
+  onCopy: () => Promise<void>;
+}) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
 
   const handleClick = async () => {
@@ -139,7 +186,11 @@ function CopyButton({ label, onCopy }: { label: string; onCopy: () => Promise<vo
 
   return (
     <button onClick={handleClick}>
-      {status === "copied" ? "✓ Copied" : status === "error" ? "✗ Failed" : label}
+      {status === "copied"
+        ? "✓ Copied"
+        : status === "error"
+          ? "✗ Failed"
+          : label}
     </button>
   );
 }
@@ -171,16 +222,25 @@ function TableCard({ table, index }: { table: TableData; index: number }) {
         {" · "}
         <button
           onClick={() => setPreview((v) => !v)}
-          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", color: "inherit", font: "inherit" }}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            textDecoration: "underline",
+            color: "inherit",
+            font: "inherit",
+          }}
         >
           {preview ? "hide preview" : "preview"}
         </button>
       </p>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-        <span style={{ opacity: 0.6, fontSize: "0.9em" }}>Copy as:</span>
+      <p style={{ marginBottom: "0.25rem" }}>Copy as:</p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <CopyButton label="CSV" onCopy={copyText(toCsv(table))} />
         <CopyButton label="TSV" onCopy={copyText(toTsv(table))} />
         <CopyButton label="JSON" onCopy={copyText(toJson(table))} />
+        <CopyButton label="Markdown" onCopy={copyText(toMarkdown(table))} />
         <CopyButton label="HTML" onCopy={copyText(html)} />
         <CopyButton label="Table" onCopy={copyRich(html)} />
       </div>
@@ -195,19 +255,31 @@ export default function App() {
   const [detectedFormat, setDetectedFormat] = useState<Format | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef(input);
-  useEffect(() => { inputRef.current = input; }, [input]);
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
 
   useEffect(() => {
     const trimmed = input.trim();
-    if (!trimmed) { setTables([]); setDetectedFormat(null); return; }
+    if (!trimmed) {
+      setTables([]);
+      setDetectedFormat(null);
+      return;
+    }
 
     const format = detectFormat(trimmed);
     setDetectedFormat(format);
 
     if (format === "markdown") {
-      parseMarkdown(trimmed).then(setTables).catch((err) => console.error("Markdown parse error:", err));
+      parseMarkdown(trimmed)
+        .then(setTables)
+        .catch((err) => console.error("Markdown parse error:", err));
     } else if (format === "json") {
-      try { setTables(parseJson(trimmed)); } catch (err) { console.error("JSON parse error:", err); }
+      try {
+        setTables(parseJson(trimmed));
+      } catch (err) {
+        console.error("JSON parse error:", err);
+      }
     } else if (format === "html") {
       setTables(parseHtml(trimmed));
     } else if (format === "tsv") {
@@ -231,9 +303,12 @@ export default function App() {
         e.preventDefault();
         const start = ta.selectionStart ?? 0;
         const end = ta.selectionEnd ?? 0;
-        const next = inputRef.current.slice(0, start) + text + inputRef.current.slice(end);
+        const next =
+          inputRef.current.slice(0, start) + text + inputRef.current.slice(end);
         setInput(next);
-        requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = start + text.length; });
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = start + text.length;
+        });
       } else {
         e.preventDefault();
         setInput(text);
@@ -244,7 +319,14 @@ export default function App() {
   }, []);
 
   return (
-    <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start", height: "100%" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: "1.5rem",
+        alignItems: "flex-start",
+        height: "100%",
+      }}
+    >
       <div style={{ flex: "0 0 50%" }}>
         <textarea
           ref={textareaRef}
@@ -252,12 +334,23 @@ export default function App() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Paste a table in Markdown, CSV, TSV, or HTML…"
           rows={24}
-          style={{ width: "100%", resize: "vertical", fontFamily: "monospace", fontSize: "14px" }}
+          style={{
+            width: "100%",
+            resize: "vertical",
+            fontFamily: "monospace",
+            fontSize: "14px",
+          }}
         />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        {detectedFormat && <p>Detected: <strong>{FORMAT_LABELS[detectedFormat]}</strong></p>}
-        {tables.map((table, i) => <TableCard key={i} table={table} index={i} />)}
+        {detectedFormat && (
+          <p>
+            Detected: <strong>{FORMAT_LABELS[detectedFormat]}</strong>
+          </p>
+        )}
+        {tables.map((table, i) => (
+          <TableCard key={i} table={table} index={i} />
+        ))}
       </div>
     </div>
   );
