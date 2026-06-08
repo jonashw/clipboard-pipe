@@ -161,6 +161,32 @@ function TextPreview({ content }: { content: string }) {
   );
 }
 
+// ToggleButton — use for any button that represents an active/inactive state.
+// Applies a consistent active indicator (bold + bottom border) across the app.
+function ToggleButton({
+  active, onClick, children, title, style,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  title?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        fontWeight: active ? "bold" : "normal",
+        borderBottom: active ? "3px solid" : "3px solid transparent",
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function transposeTable({ headers, rows }: TableData): TableData {
   const allRows = [headers, ...rows];
   const transposed = Array.from({ length: headers.length }, (_, j) =>
@@ -392,13 +418,10 @@ function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedF
       {/* Table nav */}
       <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
         {tables.map((t, i) => (
-          <button
+          <ToggleButton
             key={i}
+            active={i === safeIndex}
             onClick={() => setSelectedIndex(i)}
-            style={{
-                fontWeight: i === safeIndex ? "bold" : "normal",
-                borderBottom: i === safeIndex ? "3px solid" : "3px solid transparent",
-              }}
           >
             Table {i + 1}
             <span style={{ fontWeight: "normal", marginLeft: "0.4rem", opacity: 0.6, fontSize: "0.85em" }}>
@@ -406,7 +429,7 @@ function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedF
               {" · "}
               {(transposedFlags[i] ? transposeTable(t) : t).rows.length}r
             </span>
-          </button>
+          </ToggleButton>
         ))}
       </div>
 
@@ -414,13 +437,13 @@ function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedF
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
           <span style={{ fontWeight: "bold" }}>Table {safeIndex + 1}</span>
-          <button
+          <ToggleButton
+            active={isTransposed}
             onClick={toggleTranspose}
-            style={{ fontWeight: isTransposed ? "bold" : "normal" }}
             title="Transpose rows and columns"
           >
             ⇄ Transpose
-          </button>
+          </ToggleButton>
         </div>
         <div style={{ display: "flex", gap: "1rem" }}>
           <div style={{ flex: "0 0 50%", minWidth: 0 }}>
