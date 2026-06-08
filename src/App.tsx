@@ -10,7 +10,7 @@ import Papa from "papaparse";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TableData = { headers: string[]; rows: string[][] };
-type Format = "markdown" | "csv" | "tsv" | "html" | "json";
+type Format = "markdown" | "csv" | "tsv" | "html" | "json" | "monospace";
 
 // ── Detection ─────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ function detectFormat(input: string): Format | null {
     try { JSON.parse(t); return "json"; } catch { /* not JSON */ }
   }
   if (/<table[\s>]/i.test(t)) return "html";
+  if (t.startsWith("┌")) return "monospace";
   if (/^\|.+\|/m.test(t)) return "markdown";
   if (/\t/.test(t)) return "tsv";
   const lines = t.split("\n").filter((l) => l.trim());
@@ -93,6 +94,18 @@ function parseHtml(input: string): TableData[] {
   });
 }
 
+function parseMonospace(input: string): TableData[] {
+  const parseRow = (line: string) =>
+    line.split("│").slice(1, -1).map((cell) => cell.trim());
+  const dataLines = input
+    .trim()
+    .split("\n")
+    .filter((l) => l.startsWith("│"));
+  if (dataLines.length < 1) return [];
+  const [headerLine, ...rowLines] = dataLines;
+  return [{ headers: parseRow(headerLine), rows: rowLines.map(parseRow) }];
+}
+
 // ── Serializers ───────────────────────────────────────────────────────────────
 
 function csvCell(cell: string): string {
@@ -133,6 +146,20 @@ function toMarkdown({ headers, rows }: TableData): string {
     "| " + cells.map((c, i) => pad(c, colWidths[i])).join(" | ") + " |";
   const separator = "| " + colWidths.map((w) => "-".repeat(w)).join(" | ") + " |";
   return [renderRow(headers), separator, ...rows.map(renderRow)].join("\n");
+}
+
+function toMonospace({ headers, rows }: TableData): string {
+  const cols = headers.length;
+  const colWidths = Array.from({ length: cols }, (_, i) =>
+    Math.max(headers[i].length, ...rows.map((r) => (r[i] ?? "").length), 1)
+  );
+  const pad = (s: string, w: number) => s.padEnd(w);
+  const top    = "┌" + colWidths.map((w) => "─".repeat(w + 2)).join("┬") + "┐";
+  const divider = "├" + colWidths.map((w) => "─".repeat(w + 2)).join("┼") + "┤";
+  const bottom = "└" + colWidths.map((w) => "─".repeat(w + 2)).join("┴") + "┘";
+  const renderRow = (cells: string[]) =>
+    "│ " + cells.map((c, i) => pad(c, colWidths[i])).join(" │ ") + " │";
+  return [top, renderRow(headers), divider, ...rows.map(renderRow), bottom].join("\n");
 }
 
 // ── Shared display components ─────────────────────────────────────────────────
@@ -253,6 +280,13 @@ const OUTPUT_FORMATS: OutputFormat[] = [
     copy: (t) => navigator.clipboard.writeText(toHtmlTable(t)),
     render: (t) => <TextPreview content={toHtmlTable(t)} />,
   },
+  {
+    id: "monospace", label: "Monospace",
+    disabledFor: ["monospace"],
+    serialize: toMonospace,
+    copy: (t) => navigator.clipboard.writeText(toMonospace(t)),
+    render: (t) => <TextPreview content={toMonospace(t)} />,
+  },
 ];
 
 function defaultFormatId(detectedFormat: Format | null): string {
@@ -266,7 +300,7 @@ function defaultFormatId(detectedFormat: Format | null): string {
 // ── Format labels / badge ─────────────────────────────────────────────────────
 
 const FORMAT_LABELS: Record<Format, string> = {
-  markdown: "Markdown", csv: "CSV", tsv: "TSV", json: "JSON", html: "HTML",
+  markdown: "Markdown", csv: "CSV", tsv: "TSV", json: "JSON", html: "HTML", monospace: "Monospace",
 };
 
 function FormatBadge({ detectedFormat, hasContent }: { detectedFormat: Format | null; hasContent: boolean }) {
@@ -613,6 +647,8 @@ export default function App() {
       try { setTables(parseJson(trimmed)); } catch { setTables([]); }
     } else if (format === "html") {
       setTables(parseHtml(trimmed));
+    } else if (format === "monospace") {
+      setTables(parseMonospace(trimmed));
     } else if (format === "tsv") {
       setTables(parseTsv(trimmed));
     } else {
