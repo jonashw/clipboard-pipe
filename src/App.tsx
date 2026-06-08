@@ -393,14 +393,26 @@ function OutputPanel({ table, detectedFormat }: { table: TableData; detectedForm
 
 // ── Tables pane (nav + detail) ────────────────────────────────────────────────
 
+function applyHeaderOverrides(table: TableData, overrides: Record<number, string>): TableData {
+  if (!Object.keys(overrides).length) return table;
+  return {
+    ...table,
+    headers: table.headers.map((h, i) => (h === "" && overrides[i] != null ? overrides[i] : h)),
+  };
+}
+
 function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedFormat: Format | null }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [transposedFlags, setTransposedFlags] = useState<boolean[]>([]);
+  // Two override maps per table: one per transposition state
+  type OverridePair = { normal: Record<number, string>; transposed: Record<number, string> };
+  const [headerOverridesList, setHeaderOverridesList] = useState<OverridePair[]>([]);
 
   // Reset when tables change (new input)
   useEffect(() => {
     setSelectedIndex(0);
     setTransposedFlags(tables.map(() => false));
+    setHeaderOverridesList(tables.map(() => ({ normal: {}, transposed: {} })));
   }, [tables]);
 
   if (!tables.length) return null;
@@ -408,10 +420,29 @@ function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedF
   const safeIndex = Math.min(selectedIndex, tables.length - 1);
   const table = tables[safeIndex];
   const isTransposed = transposedFlags[safeIndex] ?? false;
-  const activeTable = isTransposed ? transposeTable(table) : table;
+  const overridePair = headerOverridesList[safeIndex] ?? { normal: {}, transposed: {} };
+  const headerOverrides = isTransposed ? overridePair.transposed : overridePair.normal;
+
+  // Overrides apply to the post-transform view so positions always match what the user sees
+  const transformedTable = isTransposed ? transposeTable(table) : table;
+  const activeTable = applyHeaderOverrides(transformedTable, headerOverrides);
 
   const toggleTranspose = () =>
     setTransposedFlags((flags) => flags.map((f, i) => (i === safeIndex ? !f : f)));
+
+  const setHeaderOverride = (colIndex: number, value: string) =>
+    setHeaderOverridesList((list) =>
+      list.map((pair, i) => {
+        if (i !== safeIndex) return pair;
+        const key = isTransposed ? "transposed" : "normal";
+        return { ...pair, [key]: { ...pair[key], [colIndex]: value } };
+      })
+    );
+
+  // Empty headers in the current view (after transform, before overrides)
+  const emptyHeaderIndices = transformedTable.headers
+    .map((h, i) => (h.trim() === "" ? i : -1))
+    .filter((i) => i !== -1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -445,6 +476,27 @@ function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedF
             ⇄ Transpose
           </ToggleButton>
         </div>
+
+        {/* Empty header overrides — positions reflect current (post-transform) view */}
+        {emptyHeaderIndices.length > 0 && (
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem", alignItems: "center" }}>
+            {emptyHeaderIndices.map((colIndex) => (
+              <label key={colIndex} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85em" }}>
+                <span style={{ opacity: 0.6 }}>
+                  {colIndex === 0 ? "First column label:" : `Column ${colIndex + 1} label:`}
+                </span>
+                <input
+                  type="text"
+                  value={headerOverrides[colIndex] ?? ""}
+                  onChange={(e) => setHeaderOverride(colIndex, e.target.value)}
+                  placeholder="unnamed"
+                  style={{ width: "10em", padding: "0.15em 0.4em", fontSize: "inherit" }}
+                />
+              </label>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: "1rem" }}>
           <div style={{ flex: "0 0 50%", minWidth: 0 }}>
             <DataProfile table={activeTable} />
