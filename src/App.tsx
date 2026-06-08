@@ -161,6 +161,14 @@ function TextPreview({ content }: { content: string }) {
   );
 }
 
+function transposeTable({ headers, rows }: TableData): TableData {
+  const allRows = [headers, ...rows];
+  const transposed = Array.from({ length: headers.length }, (_, j) =>
+    allRows.map((row) => row[j] ?? "")
+  );
+  return fromRows(transposed);
+}
+
 // ── Output format registry ────────────────────────────────────────────────────
 
 interface OutputFormat {
@@ -368,27 +376,39 @@ function TableSection({
   defaultOpen: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [isTransposed, setIsTransposed] = useState(false);
+
+  const activeTable = isTransposed ? transposeTable(table) : table;
 
   return (
     <div style={{ marginBottom: "0.5rem" }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{ width: "100%", textAlign: "left" }}
-      >
-        {open ? "▼" : "▶"} Table {index + 1}
-        <span style={{ fontWeight: "normal", marginLeft: "1rem", opacity: 0.6, fontSize: "0.85em" }}>
-          {table.headers.length} columns · {table.rows.length} rows
-        </span>
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          style={{ flex: 1, textAlign: "left" }}
+        >
+          {open ? "▼" : "▶"} Table {index + 1}
+          <span style={{ fontWeight: "normal", marginLeft: "1rem", opacity: 0.6, fontSize: "0.85em" }}>
+            {activeTable.headers.length} columns · {activeTable.rows.length} rows
+          </span>
+        </button>
+        <button
+          onClick={() => setIsTransposed((v) => !v)}
+          style={{ fontWeight: isTransposed ? "bold" : "normal", whiteSpace: "nowrap" }}
+          title="Transpose rows and columns"
+        >
+          ⇄ Transpose
+        </button>
+      </div>
       {open && (
         <div style={{ display: "flex", gap: "1rem", padding: "0.75rem 0" }}>
           {/* Col 2: Stats */}
           <div style={{ flex: "0 0 50%", minWidth: 0 }}>
-            <DataProfile table={table} />
+            <DataProfile table={activeTable} />
           </div>
           {/* Col 3: Output */}
           <div style={{ flex: "0 0 50%", minWidth: 0 }}>
-            <OutputPanel table={table} detectedFormat={detectedFormat} />
+            <OutputPanel table={activeTable} detectedFormat={detectedFormat} />
           </div>
         </div>
       )}
@@ -421,12 +441,8 @@ function profileColumn(colIndex: number, { headers, rows }: TableData): ColumnPr
     count: nonEmpty.length,
     empty: values.length - nonEmpty.length,
     unique: new Set(nonEmpty).size,
-    min: nonEmpty.length
-      ? isNumeric ? String(Math.min(...nums)) : nonEmpty.reduce((a, b) => (a < b ? a : b))
-      : "—",
-    max: nonEmpty.length
-      ? isNumeric ? String(Math.max(...nums)) : nonEmpty.reduce((a, b) => (a > b ? a : b))
-      : "—",
+    min: isNumeric ? String(Math.min(...nums)) : "—",
+    max: isNumeric ? String(Math.max(...nums)) : "—",
     mean: isNumeric
       ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2)
       : "—",
