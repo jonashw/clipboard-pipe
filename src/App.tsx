@@ -365,53 +365,72 @@ function OutputPanel({ table, detectedFormat }: { table: TableData; detectedForm
   );
 }
 
-// ── Table section (collapsible) ───────────────────────────────────────────────
+// ── Tables pane (nav + detail) ────────────────────────────────────────────────
 
-function TableSection({
-  table, index, detectedFormat, defaultOpen,
-}: {
-  table: TableData;
-  index: number;
-  detectedFormat: Format | null;
-  defaultOpen: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const [isTransposed, setIsTransposed] = useState(false);
+function TablesPane({ tables, detectedFormat }: { tables: TableData[]; detectedFormat: Format | null }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [transposedFlags, setTransposedFlags] = useState<boolean[]>([]);
 
+  // Reset when tables change (new input)
+  useEffect(() => {
+    setSelectedIndex(0);
+    setTransposedFlags(tables.map(() => false));
+  }, [tables]);
+
+  if (!tables.length) return null;
+
+  const safeIndex = Math.min(selectedIndex, tables.length - 1);
+  const table = tables[safeIndex];
+  const isTransposed = transposedFlags[safeIndex] ?? false;
   const activeTable = isTransposed ? transposeTable(table) : table;
 
+  const toggleTranspose = () =>
+    setTransposedFlags((flags) => flags.map((f, i) => (i === safeIndex ? !f : f)));
+
   return (
-    <div style={{ marginBottom: "0.5rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          style={{ flex: 1, textAlign: "left" }}
-        >
-          {open ? "▼" : "▶"} Table {index + 1}
-          <span style={{ fontWeight: "normal", marginLeft: "1rem", opacity: 0.6, fontSize: "0.85em" }}>
-            {activeTable.headers.length} columns · {activeTable.rows.length} rows
-          </span>
-        </button>
-        <button
-          onClick={() => setIsTransposed((v) => !v)}
-          style={{ fontWeight: isTransposed ? "bold" : "normal", whiteSpace: "nowrap" }}
-          title="Transpose rows and columns"
-        >
-          ⇄ Transpose
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Table nav */}
+      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+        {tables.map((t, i) => (
+          <button
+            key={i}
+            onClick={() => setSelectedIndex(i)}
+            style={{
+                fontWeight: i === safeIndex ? "bold" : "normal",
+                borderBottom: i === safeIndex ? "3px solid" : "3px solid transparent",
+              }}
+          >
+            Table {i + 1}
+            <span style={{ fontWeight: "normal", marginLeft: "0.4rem", opacity: 0.6, fontSize: "0.85em" }}>
+              {(transposedFlags[i] ? transposeTable(t) : t).headers.length}c
+              {" · "}
+              {(transposedFlags[i] ? transposeTable(t) : t).rows.length}r
+            </span>
+          </button>
+        ))}
       </div>
-      {open && (
-        <div style={{ display: "flex", gap: "1rem", padding: "0.75rem 0" }}>
-          {/* Col 2: Stats */}
+
+      {/* Detail area */}
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+          <span style={{ fontWeight: "bold" }}>Table {safeIndex + 1}</span>
+          <button
+            onClick={toggleTranspose}
+            style={{ fontWeight: isTransposed ? "bold" : "normal" }}
+            title="Transpose rows and columns"
+          >
+            ⇄ Transpose
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: "1rem" }}>
           <div style={{ flex: "0 0 50%", minWidth: 0 }}>
             <DataProfile table={activeTable} />
           </div>
-          {/* Col 3: Output */}
           <div style={{ flex: "0 0 50%", minWidth: 0 }}>
             <OutputPanel table={activeTable} detectedFormat={detectedFormat} />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -569,15 +588,7 @@ export default function App() {
 
       {/* Right: Tables (67%) */}
       <div style={{ flex: 1, overflow: "auto", minWidth: 0 }}>
-        {tables.map((table, i) => (
-          <TableSection
-            key={i}
-            table={table}
-            index={i}
-            detectedFormat={detectedFormat}
-            defaultOpen={i === 0}
-          />
-        ))}
+        <TablesPane tables={tables} detectedFormat={detectedFormat} />
       </div>
     </div>
   );
