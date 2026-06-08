@@ -1,4 +1,4 @@
-# clipboard-pipe
+# TableShift
 
 Paste a table in any format — get it back in any other format.
 
