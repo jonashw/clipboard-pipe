@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import {
   type TableData,
+  type Cell,
   type Format,
+  cell,
   detectFormat,
   parseMarkdown,
   parseCsv,
@@ -26,6 +28,11 @@ function parseHtml(input: string): TableData[] {
 
 // ── Shared display components ─────────────────────────────────────────────────
 
+function CellContent({ c }: { c: Cell }) {
+  if (c.href) return <a href={c.href}>{c.text}</a>;
+  return <>{c.text}</>;
+}
+
 // Safe React-rendered table — no dangerouslySetInnerHTML, cells are escaped by React.
 function TablePreview({ table }: { table: TableData }) {
   return (
@@ -33,15 +40,15 @@ function TablePreview({ table }: { table: TableData }) {
       <thead>
         <tr>
           {table.headers.map((h, i) => (
-            <th key={i}>{h}</th>
+            <th key={i}><CellContent c={h} /></th>
           ))}
         </tr>
       </thead>
       <tbody>
         {table.rows.map((row, i) => (
           <tr key={i}>
-            {row.map((cell, j) => (
-              <td key={j}>{cell}</td>
+            {row.map((c, j) => (
+              <td key={j}><CellContent c={c} /></td>
             ))}
           </tr>
         ))}
@@ -98,7 +105,7 @@ function ToggleButton({
 function transposeTable({ headers, rows }: TableData): TableData {
   const allRows = [headers, ...rows];
   const transposed = Array.from({ length: headers.length }, (_, j) =>
-    allRows.map((row) => row[j] ?? ""),
+    allRows.map((row) => row[j] ?? cell("")),
   );
   return fromRows(transposed);
 }
@@ -299,6 +306,85 @@ function InputDisplay({
   );
 }
 
+// ── Link support matrix popover ───────────────────────────────────────────────
+
+const LINK_SUPPORT: {
+  format: string;
+  readsLinks: boolean;
+  writesLinks: boolean;
+}[] = [
+  { format: "Markdown", readsLinks: true, writesLinks: true },
+  { format: "HTML", readsLinks: true, writesLinks: true },
+  { format: "CSV", readsLinks: false, writesLinks: false },
+  { format: "TSV", readsLinks: false, writesLinks: false },
+  { format: "JSON", readsLinks: false, writesLinks: true },
+  { format: "Monospace", readsLinks: false, writesLinks: false },
+];
+
+function LinkSupportPopover({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.3)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--background-body, #fff)",
+          border: "1px solid var(--border, #ccc)",
+          borderRadius: "6px",
+          padding: "1.25rem",
+          maxWidth: "360px",
+          width: "90%",
+        }}
+      >
+        <div style={{ fontWeight: "bold", marginBottom: "0.75rem" }}>
+          Link Support by Format
+        </div>
+        <table style={{ width: "100%", fontSize: "0.9em", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", paddingRight: "1rem" }}>Format</th>
+              <th style={{ textAlign: "center" }}>Reads Links</th>
+              <th style={{ textAlign: "center" }}>Writes Links</th>
+            </tr>
+          </thead>
+          <tbody>
+            {LINK_SUPPORT.map((row) => (
+              <tr key={row.format}>
+                <td style={{ paddingRight: "1rem" }}>{row.format}</td>
+                <td style={{ textAlign: "center" }}>{row.readsLinks ? "✓" : "—"}</td>
+                <td style={{ textAlign: "center" }}>{row.writesLinks ? "✓" : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button
+          onClick={onClose}
+          style={{ marginTop: "0.75rem", fontSize: "0.85em" }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Output panel ──────────────────────────────────────────────────────────────
 
 function OutputPanel({
@@ -313,6 +399,7 @@ function OutputPanel({
   );
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
+  const [showLinkMatrix, setShowLinkMatrix] = useState(false);
 
   // Only reset selection when the currently selected format becomes disabled
   useEffect(() => {
@@ -369,7 +456,15 @@ function OutputPanel({
         <button onClick={handleCopy} style={{ marginLeft: "auto" }}>
           {copied ? "✓ Copied" : error ? "✗ Failed" : "Copy"}
         </button>
+        <button
+          onClick={() => setShowLinkMatrix(true)}
+          title="Link support by format"
+          style={{ fontSize: "0.8em", padding: "0.15em 0.4em" }}
+        >
+          🔗
+        </button>
       </div>
+      <LinkSupportPopover open={showLinkMatrix} onClose={() => setShowLinkMatrix(false)} />
       <div style={{ flex: 1, overflow: "auto" }}>
         {selectedFormat.render(table)}
       </div>
@@ -387,7 +482,7 @@ function applyHeaderOverrides(
   return {
     ...table,
     headers: table.headers.map((h, i) =>
-      h === "" && overrides[i] != null ? overrides[i] : h,
+      h.text === "" && overrides[i] != null ? cell(overrides[i]) : h,
     ),
   };
 }
@@ -450,7 +545,7 @@ function TablesPane({
 
   // Empty headers in the current view (after transform, before overrides)
   const emptyHeaderIndices = transformedTable.headers
-    .map((h, i) => (h.trim() === "" ? i : -1))
+    .map((h, i) => (h.text.trim() === "" ? i : -1))
     .filter((i) => i !== -1);
 
   return (
@@ -578,13 +673,13 @@ function profileColumn(
   colIndex: number,
   { headers, rows }: TableData,
 ): ColumnProfile {
-  const values = rows.map((r) => r[colIndex] ?? "");
+  const values = rows.map((r) => r[colIndex]?.text ?? "");
   const nonEmpty = values.filter((v) => v.trim() !== "");
   const nums = nonEmpty.map(Number).filter((n) => !isNaN(n));
   const isNumeric = nums.length === nonEmpty.length && nonEmpty.length > 0;
 
   return {
-    name: headers[colIndex],
+    name: headers[colIndex]?.text ?? "",
     type: isNumeric ? "numeric" : "text",
     count: nonEmpty.length,
     empty: values.length - nonEmpty.length,

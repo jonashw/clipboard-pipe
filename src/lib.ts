@@ -8,8 +8,13 @@ import Papa from "papaparse";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type TableData = { headers: string[]; rows: string[][] };
+export type Cell = { text: string; href?: string };
+export type TableData = { headers: Cell[]; rows: Cell[][] };
 export type Format = "markdown" | "csv" | "tsv" | "html" | "json" | "monospace";
+
+export function cell(text: string, href?: string): Cell {
+  return href ? { text, href } : { text };
+}
 
 // ── Detection ─────────────────────────────────────────────────────────────────
 
@@ -49,17 +54,29 @@ export function extractText(nodes: PhrasingContent[]): string {
     .join("");
 }
 
+export function extractCell(nodes: PhrasingContent[]): Cell {
+  if (
+    nodes.length === 1 &&
+    nodes[0].type === "link" &&
+    "url" in nodes[0]
+  ) {
+    const link = nodes[0] as { url: string; children: PhrasingContent[] };
+    return cell(extractText(link.children), link.url);
+  }
+  return cell(extractText(nodes));
+}
+
 export function extractMarkdownTables(ast: Root): TableData[] {
   const tables: TableData[] = [];
   visit(ast, "table", (node: Table) => {
     const [headerRow, ...dataRows] = node.children as TableRow[];
     tables.push({
-      headers: headerRow.children.map((cell) =>
-        extractText(cell.children as PhrasingContent[]),
+      headers: headerRow.children.map((c) =>
+        extractCell(c.children as PhrasingContent[]),
       ),
       rows: dataRows.map((row) =>
-        row.children.map((cell) =>
-          extractText(cell.children as PhrasingContent[]),
+        row.children.map((c) =>
+          extractCell(c.children as PhrasingContent[]),
         ),
       ),
     });
@@ -80,14 +97,18 @@ export async function parseMarkdown(input: string): Promise<TableData[]> {
   return ast ? extractMarkdownTables(ast) : [];
 }
 
-export function fromRows(allRows: string[][]): TableData {
+export function fromRows(allRows: Cell[][]): TableData {
   const [headers = [], ...rows] = allRows;
   return { headers, rows };
 }
 
+export function fromStringRows(allRows: string[][]): TableData {
+  return fromRows(allRows.map((row) => row.map((s) => cell(s))));
+}
+
 export function parseCsv(input: string): TableData[] {
   const result = Papa.parse<string[]>(input, { skipEmptyLines: true });
-  return result.data.length > 1 ? [fromRows(result.data)] : [];
+  return result.data.length > 1 ? [fromStringRows(result.data)] : [];
 }
 
 export function parseTsv(input: string): TableData[] {
@@ -95,7 +116,7 @@ export function parseTsv(input: string): TableData[] {
     .trim()
     .split("\n")
     .map((line) => line.split("\t"));
-  return allRows.length > 1 ? [fromRows(allRows)] : [];
+  return allRows.length > 1 ? [fromStringRows(allRows)] : [];
 }
 
 export function parseJson(input: string): TableData[] {
@@ -107,8 +128,8 @@ export function parseJson(input: string): TableData[] {
   const headers = Object.keys(arr[0]);
   return [
     {
-      headers,
-      rows: arr.map((obj) => headers.map((k) => String(obj[k] ?? ""))),
+      headers: headers.map((h) => cell(h)),
+      rows: arr.map((obj) => headers.map((k) => cell(String(obj[k] ?? "")))),
     },
   ];
 }
@@ -118,7 +139,7 @@ export function parseMonospace(input: string): TableData[] {
     line
       .split("│")
       .slice(1, -1)
-      .map((cell) => cell.trim());
+      .map((s) => cell(s.trim()));
   const dataLines = input
     .trim()
     .split("\n")
@@ -132,7 +153,12 @@ export function parseMonospace(input: string): TableData[] {
 export interface HtmlDocLike {
   querySelectorAll(selector: string): Iterable<{
     querySelectorAll(selector: string): Iterable<{
-      querySelectorAll(selector: string): Iterable<{ textContent: string | null }>;
+      textContent: string | null;
+      querySelectorAll(selector: string): Iterable<{
+        textContent: string | null;
+        getAttribute?(attr: string): string | null;
+        href?: string;
+      }>;
     }>;
   }>;
 }
@@ -140,9 +166,17 @@ export interface HtmlDocLike {
 export function parseHtmlDoc(doc: HtmlDocLike): TableData[] {
   return Array.from(doc.querySelectorAll("table")).map((table) => {
     const allRows = Array.from(table.querySelectorAll("tr")).map((row) =>
-      Array.from(row.querySelectorAll("th, td")).map(
-        (cell) => cell.textContent ?? "",
-      ),
+      Array.from(row.querySelectorAll("th, td")).map((td) => {
+        const anchors = Array.from(
+          (td as unknown as { querySelectorAll(s: string): Iterable<{ textContent: string | null; getAttribute?(a: string): string | null; href?: string }> }).querySelectorAll("a"),
+        );
+        if (anchors.length === 1) {
+          const a = anchors[0];
+          const href = a.getAttribute ? a.getAttribute("href") : a.href;
+          if (href) return cell(a.textContent ?? "", href);
+        }
+        return cell(td.textContent ?? "");
+      }),
     );
     return fromRows(allRows);
   });
@@ -150,9 +184,9 @@ export function parseHtmlDoc(doc: HtmlDocLike): TableData[] {
 
 // ── Serializers ───────────────────────────────────────────────────────────────
 
-function csvCell(cell: string): string {
-  const escaped = cell.replace(/"/g, '""');
-  return /[,"\n\r]/.test(cell) ? `"${escaped}"` : escaped;
+function csvCell(c: Cell): string {
+  const escaped = c.text.replace(/"/g, '""');
+  return /[,"\n\r]/.test(c.text) ? `"${escaped}"` : escaped;
 }
 
 export function toCsv({ headers, rows }: TableData): string {
@@ -162,44 +196,64 @@ export function toCsv({ headers, rows }: TableData): string {
 export function toTsv({ headers, rows }: TableData): string {
   return [headers, ...rows]
     .map((row) =>
-      row.map((c) => c.replace(/\t/g, " ").replace(/\n/g, " ")).join("\t"),
+      row.map((c) => c.text.replace(/\t/g, " ").replace(/\n/g, " ")).join("\t"),
     )
     .join("\n");
 }
 
+function htmlCell(c: Cell): string {
+  return c.href ? `<a href="${c.href}">${c.text}</a>` : c.text;
+}
+
 export function toHtmlTable({ headers, rows }: TableData): string {
-  const thead = `<thead><tr>${headers.map((c) => `<th>${c}</th>`).join("")}</tr></thead>`;
-  const tbody = `<tbody>${rows.map((row) => `<tr>${row.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>`;
+  const thead = `<thead><tr>${headers.map((c) => `<th>${htmlCell(c)}</th>`).join("")}</tr></thead>`;
+  const tbody = `<tbody>${rows.map((row) => `<tr>${row.map((c) => `<td>${htmlCell(c)}</td>`).join("")}</tr>`).join("")}</tbody>`;
   return `<table>${thead}${tbody}</table>`;
 }
 
 export function toJson({ headers, rows }: TableData): string {
   return JSON.stringify(
-    rows.map((row) =>
-      Object.fromEntries(headers.map((key, i) => [key, row[i] ?? ""])),
-    ),
+    rows.map((row) => {
+      const obj: Record<string, string> = {};
+      headers.forEach((key, i) => {
+        const c = row[i];
+        obj[key.text] = c?.text ?? "";
+        if (c?.href) {
+          obj[`${key.text}_href`] = c.href;
+        }
+      });
+      return obj;
+    }),
     null,
     2,
   );
 }
 
+function cellToMarkdown(c: Cell): string {
+  return c.href ? `[${c.text}](${c.href})` : c.text;
+}
+
 export function toMarkdown({ headers, rows }: TableData): string {
   const cols = headers.length;
+  const headerStrs = headers.map(cellToMarkdown);
+  const rowStrs = rows.map((row) => row.map(cellToMarkdown));
   const colWidths = Array.from({ length: cols }, (_, i) =>
-    Math.max(headers[i].length, ...rows.map((r) => (r[i] ?? "").length), 3),
+    Math.max(headerStrs[i].length, ...rowStrs.map((r) => (r[i] ?? "").length), 3),
   );
   const pad = (s: string, w: number) => s.padEnd(w);
   const renderRow = (cells: string[]) =>
     "| " + cells.map((c, i) => pad(c, colWidths[i])).join(" | ") + " |";
   const separator =
     "| " + colWidths.map((w) => "-".repeat(w)).join(" | ") + " |";
-  return [renderRow(headers), separator, ...rows.map(renderRow)].join("\n");
+  return [renderRow(headerStrs), separator, ...rowStrs.map(renderRow)].join("\n");
 }
 
 export function toMonospace({ headers, rows }: TableData): string {
   const cols = headers.length;
+  const headerStrs = headers.map((c) => c.text);
+  const rowStrs = rows.map((row) => row.map((c) => c.text));
   const colWidths = Array.from({ length: cols }, (_, i) =>
-    Math.max(headers[i].length, ...rows.map((r) => (r[i] ?? "").length), 1),
+    Math.max(headerStrs[i].length, ...rowStrs.map((r) => (r[i] ?? "").length), 1),
   );
   const pad = (s: string, w: number) => s.padEnd(w);
   const top = "┌" + colWidths.map((w) => "─".repeat(w + 2)).join("┬") + "┐";
@@ -209,9 +263,9 @@ export function toMonospace({ headers, rows }: TableData): string {
     "│ " + cells.map((c, i) => pad(c, colWidths[i])).join(" │ ") + " │";
   return [
     top,
-    renderRow(headers),
+    renderRow(headerStrs),
     divider,
-    ...rows.map(renderRow),
+    ...rowStrs.map(renderRow),
     bottom,
   ].join("\n");
 }

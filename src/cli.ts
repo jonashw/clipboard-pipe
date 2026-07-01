@@ -7,6 +7,7 @@ import { parse as parseHtmlNode } from "node-html-parser";
 import {
   type ConversionName,
   type TableData,
+  cell,
   CONVERSIONS,
   parseInput,
 } from "./lib.ts";
@@ -17,7 +18,14 @@ function parseHtml(input: string): TableData[] {
   const doc = parseHtmlNode(input);
   return doc.querySelectorAll("table").map((table) => {
     const allRows = table.querySelectorAll("tr").map((row) =>
-      row.querySelectorAll("th, td").map((cell) => cell.text),
+      row.querySelectorAll("th, td").map((td) => {
+        const anchors = td.querySelectorAll("a");
+        if (anchors.length === 1) {
+          const href = anchors[0].getAttribute("href");
+          if (href) return cell(anchors[0].text, href);
+        }
+        return cell(td.text);
+      }),
     );
     const [headers = [], ...rows] = allRows;
     return { headers, rows };
