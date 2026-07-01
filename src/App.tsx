@@ -317,7 +317,7 @@ const LINK_SUPPORT: {
   { format: "HTML", readsLinks: true, writesLinks: true },
   { format: "CSV", readsLinks: false, writesLinks: false },
   { format: "TSV", readsLinks: false, writesLinks: false },
-  { format: "JSON", readsLinks: false, writesLinks: true },
+  { format: "JSON", readsLinks: true, writesLinks: true },
   { format: "Monospace", readsLinks: false, writesLinks: false },
 ];
 
@@ -374,6 +374,13 @@ function LinkSupportPopover({
             ))}
           </tbody>
         </table>
+        <p style={{ fontSize: "0.8em", opacity: 0.75, margin: "0.75rem 0 0" }}>
+          Links are preserved when a cell contains a single link.
+          Markdown uses <code>[text](url)</code>; HTML uses <code>&lt;a&gt;</code> tags.
+          JSON encodes links as companion <code>_href</code> keys
+          (e.g. <code>"Site_href"</code> alongside <code>"Site"</code>)
+          and recognizes the same pattern on input for lossless round-tripping.
+        </p>
         <button
           onClick={onClose}
           style={{ marginTop: "0.75rem", fontSize: "0.85em" }}

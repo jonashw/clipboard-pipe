@@ -1,0 +1,66 @@
+[
+  {
+    "Name": "React",
+    "Website": "react.dev",
+    "Website_href": "https://react.dev",
+    "Documentation": "Docs",
+    "Documentation_href": "https://react.dev/reference/react",
+    "Category": "Frontend"
+  },
+  {
+    "Name": "Vue",
+    "Website": "vuejs.org",
+    "Website_href": "https://vuejs.org",
+    "Documentation": "Docs",
+    "Documentation_href": "https://vuejs.org/guide/",
+    "Category": "Frontend"
+  },
+  {
+    "Name": "Svelte",
+    "Website": "svelte.dev",
+    "Website_href": "https://svelte.dev",
+    "Documentation": "Docs",
+    "Documentation_href": "https://svelte.dev/docs",
+    "Category": "Frontend"
+  },
+  {
+    "Name": "Express",
+    "Website": "expressjs.com",
+    "Website_href": "https://expressjs.com",
+    "Documentation": "Docs",
+    "Documentation_href": "https://expressjs.com/en/api.html",
+    "Category": "Backend"
+  },
+  {
+    "Name": "Fastify",
+    "Website": "fastify.dev",
+    "Website_href": "https://fastify.dev",
+    "Documentation": "Docs",
+    "Documentation_href": "https://fastify.dev/docs/latest/",
+    "Category": "Backend"
+  },
+  {
+    "Name": "Next.js",
+    "Website": "nextjs.org",
+    "Website_href": "https://nextjs.org",
+    "Documentation": "Docs",
+    "Documentation_href": "https://nextjs.org/docs",
+    "Category": "Fullstack"
+  },
+  {
+    "Name": "Nuxt",
+    "Website": "nuxt.com",
+    "Website_href": "https://nuxt.com",
+    "Documentation": "Docs",
+    "Documentation_href": "https://nuxt.com/docs",
+    "Category": "Fullstack"
+  },
+  {
+    "Name": "Vite",
+    "Website": "vite.dev",
+    "Website_href": "https://vite.dev",
+    "Documentation": "Docs",
+    "Documentation_href": "https://vite.dev/guide/",
+    "Category": "Tooling"
+  }
+]

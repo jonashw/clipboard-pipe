@@ -125,11 +125,23 @@ export function parseJson(input: string): TableData[] {
     ? parsed
     : [parsed];
   if (!arr.length) return [];
-  const headers = Object.keys(arr[0]);
+  const allKeys = Object.keys(arr[0]);
+  // Separate _href companion keys from display keys
+  const hrefSuffix = "_href";
+  const hrefKeys = new Set(allKeys.filter((k) => k.endsWith(hrefSuffix)));
+  const headers = allKeys.filter((k) => !hrefKeys.has(k));
   return [
     {
       headers: headers.map((h) => cell(h)),
-      rows: arr.map((obj) => headers.map((k) => cell(String(obj[k] ?? "")))),
+      rows: arr.map((obj) =>
+        headers.map((k) => {
+          const href = obj[`${k}${hrefSuffix}`];
+          return cell(
+            String(obj[k] ?? ""),
+            typeof href === "string" ? href : undefined,
+          );
+        }),
+      ),
     },
   ];
 }
