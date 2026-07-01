@@ -3,9 +3,11 @@ import {
   type TableData,
   type Cell,
   type Format,
+  type Block,
   cell,
   detectFormat,
   parseMarkdown,
+  parseMarkdownBlocks,
   parseCsv,
   parseTsv,
   parseJson,
@@ -704,6 +706,72 @@ function TablesPane({
   );
 }
 
+// ── Document view (blocks) ────────────────────────────────────────────────────
+
+function TextBlock({ content }: { content: string }) {
+  // Render markdown text blocks: detect headings and render them styled
+  const lines = content.split("\n");
+  return (
+    <div style={{ margin: "0.5rem 0" }}>
+      {lines.map((line, i) => {
+        const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
+        if (headingMatch) {
+          const level = headingMatch[1].length as 1 | 2 | 3 | 4 | 5 | 6;
+          const text = headingMatch[2];
+          const sizes: Record<number, string> = {
+            1: "1.6em",
+            2: "1.35em",
+            3: "1.15em",
+            4: "1em",
+            5: "0.9em",
+            6: "0.85em",
+          };
+          return (
+            <div
+              key={i}
+              style={{
+                fontSize: sizes[level],
+                fontWeight: "bold",
+                margin: "0.4em 0 0.2em",
+              }}
+            >
+              {text}
+            </div>
+          );
+        }
+        if (line.trim() === "") return <div key={i} style={{ height: "0.4em" }} />;
+        return (
+          <div key={i} style={{ opacity: 0.85, fontSize: "0.9em" }}>
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DocumentView({
+  blocks,
+  detectedFormat,
+}: {
+  blocks: Block[];
+  detectedFormat: Format | null;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      {blocks.map((block, i) =>
+        block.type === "text" ? (
+          <TextBlock key={i} content={block.content} />
+        ) : (
+          <div key={i} style={{ marginBottom: "0.5rem" }}>
+            <OutputPanel table={block.table} detectedFormat={detectedFormat} />
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 // ── Data profiling ────────────────────────────────────────────────────────────
 
 interface ColumnProfile {
@@ -824,7 +892,9 @@ function DataProfile({ table }: { table: TableData }) {
 export default function App() {
   const [input, setInput] = useState("");
   const [tables, setTables] = useState<TableData[]>([]);
+  const [blocks, setBlocks] = useState<Block[]>([]);
   const [detectedFormat, setDetectedFormat] = useState<Format | null>(null);
+  const [viewMode, setViewMode] = useState<"tables" | "document">("tables");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef(input);
   useEffect(() => {
@@ -836,6 +906,7 @@ export default function App() {
     const trimmed = input.trim();
     if (!trimmed) {
       setTables([]);
+      setBlocks([]);
       setDetectedFormat(null);
       return;
     }
@@ -845,6 +916,7 @@ export default function App() {
 
     if (format === null) {
       setTables([]);
+      setBlocks([]);
       return;
     }
 
@@ -853,6 +925,11 @@ export default function App() {
       parseMarkdown(trimmed)
         .then((result) => {
           if (!cancelled) setTables(result);
+        })
+        .catch(console.error);
+      parseMarkdownBlocks(trimmed)
+        .then((result) => {
+          if (!cancelled) setBlocks(result);
         })
         .catch(console.error);
       return () => {
@@ -873,6 +950,7 @@ export default function App() {
     } else {
       setTables(parseCsv(trimmed));
     }
+    setBlocks([]);
   }, [input]);
 
   // Global paste handler
@@ -929,9 +1007,31 @@ export default function App() {
         />
       </div>
 
-      {/* Right: Tables (67%) */}
-      <div style={{ flex: 1, overflow: "auto", minWidth: 0 }}>
-        <TablesPane tables={tables} detectedFormat={detectedFormat} />
+      {/* Right: Output (67%) */}
+      <div style={{ flex: 1, overflow: "auto", minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {blocks.length > 1 && (
+          <div style={{ display: "flex", gap: "0.25rem", marginBottom: "0.5rem" }}>
+            <ToggleButton
+              active={viewMode === "tables"}
+              onClick={() => setViewMode("tables")}
+            >
+              Tables
+            </ToggleButton>
+            <ToggleButton
+              active={viewMode === "document"}
+              onClick={() => setViewMode("document")}
+            >
+              Document
+            </ToggleButton>
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          {viewMode === "document" && blocks.length > 1 ? (
+            <DocumentView blocks={blocks} detectedFormat={detectedFormat} />
+          ) : (
+            <TablesPane tables={tables} detectedFormat={detectedFormat} />
+          )}
+        </div>
       </div>
     </div>
   );

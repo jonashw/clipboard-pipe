@@ -11,6 +11,9 @@ import Papa from "papaparse";
 export type Cell = { text: string; href?: string };
 export type TableData = { headers: Cell[]; rows: Cell[][] };
 export type Format = "markdown" | "csv" | "tsv" | "html" | "json" | "monospace";
+export type Block =
+  | { type: "text"; content: string }
+  | { type: "table"; table: TableData };
 
 export function cell(text: string, href?: string): Cell {
   return href ? { text, href } : { text };
@@ -95,6 +98,62 @@ export async function parseMarkdown(input: string): Promise<TableData[]> {
     .use(remarkHtml, { sanitize: false })
     .process(input);
   return ast ? extractMarkdownTables(ast) : [];
+}
+
+export function extractMarkdownBlocks(ast: Root, source: string): Block[] {
+  const blocks: Block[] = [];
+  let lastEnd = 0;
+
+  for (const node of ast.children) {
+    const startOffset = node.position?.start.offset;
+    const endOffset = node.position?.end.offset;
+
+    if (node.type === "table") {
+      if (startOffset != null) {
+        const textBefore = source.slice(lastEnd, startOffset).trim();
+        if (textBefore) {
+          blocks.push({ type: "text", content: textBefore });
+        }
+      }
+      const [headerRow, ...dataRows] = (node as Table).children as TableRow[];
+      blocks.push({
+        type: "table",
+        table: {
+          headers: headerRow.children.map((c) =>
+            extractCell(c.children as PhrasingContent[]),
+          ),
+          rows: dataRows.map((row) =>
+            row.children.map((c) =>
+              extractCell(c.children as PhrasingContent[]),
+            ),
+          ),
+        },
+      });
+      if (endOffset != null) {
+        lastEnd = endOffset;
+      }
+    }
+  }
+
+  const trailing = source.slice(lastEnd).trim();
+  if (trailing) {
+    blocks.push({ type: "text", content: trailing });
+  }
+
+  return blocks;
+}
+
+export async function parseMarkdownBlocks(input: string): Promise<Block[]> {
+  let ast: Root | null = null;
+  await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(() => (tree: Root) => {
+      ast = tree;
+    })
+    .use(remarkHtml, { sanitize: false })
+    .process(input);
+  return ast ? extractMarkdownBlocks(ast, input) : [];
 }
 
 export function fromRows(allRows: Cell[][]): TableData {
