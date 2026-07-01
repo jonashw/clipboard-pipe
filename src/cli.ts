@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+import { execSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parse as parseHtmlNode } from "node-html-parser";
 import {
   type ConversionName,
@@ -20,16 +24,34 @@ function parseHtml(input: string): TableData[] {
   });
 }
 
-// ── CLI ───────────────────────────────────────────────────────────────────────
+// ── Clipboard helpers ─────────────────────────────────────────────────────────
 
-const CONVERSION_NAMES = Object.keys(CONVERSIONS) as ConversionName[];
+function copyHtml(html: string): void {
+  const dir = mkdtempSync(join(tmpdir(), "tableshift-"));
+  try {
+    const file = join(dir, "t.html");
+    writeFileSync(file, html, "utf8");
+    execSync(
+      `osascript -e 'set the clipboard to (read (POSIX file "${file}") as «class HTML»)'`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function copyText(text: string): void {
+  execSync("pbcopy", { input: text });
+}
+
+// ── CLI ───────────────────────────────────────────────────────────────────────
 
 function usage(): void {
   console.error(
-    `Usage: tableshift <conversion>
+    `Usage: tableshift <conversion> [--copy]
 
 Reads table data from stdin, auto-detects the format, and writes the
-converted output to stdout.
+converted output to stdout.  Pass --copy to send directly to the clipboard
+instead (toHtml uses a rich text/html clipboard type; all others use pbcopy).
 
 Conversions:
   toCsv
@@ -43,19 +65,22 @@ Supported input formats: markdown, csv, tsv, html, json, monospace
 
 Examples:
   echo "Name,Age\\nAlice,30\\nBob,25" | tableshift toMarkdown
-  cat data.json | tableshift toMonospace
-  cat table.html | tableshift toCsv`,
+  cat data.json | tableshift toMonospace --copy
+  cat table.html | tableshift toHtml --copy`,
   );
 }
 
 async function main(): Promise<void> {
-  const [, , conversionArg] = process.argv;
+  const args = process.argv.slice(2);
+  const copyFlag = args.includes("--copy");
+  const conversionArg = args.find((a) => !a.startsWith("-"));
 
   if (!conversionArg || conversionArg === "--help" || conversionArg === "-h") {
     usage();
     process.exit(conversionArg ? 0 : 1);
   }
 
+  const CONVERSION_NAMES = Object.keys(CONVERSIONS) as ConversionName[];
   if (!CONVERSION_NAMES.includes(conversionArg as ConversionName)) {
     console.error(
       `Error: unknown conversion "${conversionArg}"\n\nValid conversions: ${CONVERSION_NAMES.join(", ")}`,
@@ -84,7 +109,15 @@ async function main(): Promise<void> {
   }
 
   const output = tables.map(conversion).join("\n\n");
-  process.stdout.write(output + "\n");
+
+  if (copyFlag) {
+    const isHtml =
+      conversionArg === "toHtml" || conversionArg === "toHtmlTable";
+    isHtml ? copyHtml(output) : copyText(output);
+    console.error(`Copied to clipboard.`);
+  } else {
+    process.stdout.write(output + "\n");
+  }
 }
 
 main().catch((err: unknown) => {
