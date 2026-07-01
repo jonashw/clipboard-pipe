@@ -511,6 +511,7 @@ function TablesPane({
   const [headerOverridesList, setHeaderOverridesList] = useState<
     OverridePair[]
   >([]);
+  const [showProfile, setShowProfile] = useState(false);
 
   // Reset when tables change (new input)
   useEffect(() => {
@@ -599,13 +600,22 @@ function TablesPane({
           }}
         >
           <span style={{ fontWeight: "bold" }}>Table {safeIndex + 1}</span>
-          <ToggleButton
-            active={isTransposed}
-            onClick={toggleTranspose}
-            title="Transpose rows and columns"
-          >
-            ⇄ Transpose
-          </ToggleButton>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={() => setShowProfile(true)}
+              title="Show column profile"
+              style={{ fontSize: "0.8em", padding: "0.15em 0.5em" }}
+            >
+              Profile
+            </button>
+            <ToggleButton
+              active={isTransposed}
+              onClick={toggleTranspose}
+              title="Transpose rows and columns"
+            >
+              ⇄ Transpose
+            </ToggleButton>
+          </div>
         </div>
 
         {/* Empty header overrides — positions reflect current (post-transform) view */}
@@ -650,14 +660,45 @@ function TablesPane({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: "1rem" }}>
-          <div style={{ flex: "0 0 50%", minWidth: 0 }}>
-            <DataProfile table={activeTable} />
-          </div>
-          <div style={{ flex: "0 0 50%", minWidth: 0 }}>
-            <OutputPanel table={activeTable} detectedFormat={detectedFormat} />
-          </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <OutputPanel table={activeTable} detectedFormat={detectedFormat} />
         </div>
+
+        {showProfile && (
+          <div
+            onClick={() => setShowProfile(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0,0,0,0.3)",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "var(--background-body, #fff)",
+                border: "1px solid var(--border, #ccc)",
+                borderRadius: "6px",
+                padding: "1.25rem",
+                maxWidth: "90vw",
+                maxHeight: "80vh",
+                overflow: "auto",
+              }}
+            >
+              <DataProfile table={activeTable} />
+              <button
+                onClick={() => setShowProfile(false)}
+                style={{ marginTop: "0.75rem", fontSize: "0.85em" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
